@@ -1,14 +1,21 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useAuth } from "@/contexts/AuthContext";
+import { LoginPage } from "@/components/nero/LoginPage";
+import { NeroLayout } from "@/components/nero/NeroLayout";
 
 const Index = () => {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="w-6 h-6 border-2 border-muted-foreground border-t-foreground rounded-full animate-spin" />
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (!user) return <LoginPage />;
+
+  return <NeroLayout />;
 };
 
 export default Index;
