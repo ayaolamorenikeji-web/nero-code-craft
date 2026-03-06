@@ -1,1 +1,4 @@
 project_id = "idzhgvjnfkrfunlsnmdl"
+
+[functions.nero-chat]
+verify_jwt = false
