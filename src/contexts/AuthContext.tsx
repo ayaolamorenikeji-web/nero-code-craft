@@ -1,14 +1,19 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import type { User, Session } from "@supabase/supabase-js";
+import { createContext, useContext, useState, ReactNode } from "react";
+
+interface User {
+  email: string;
+  user_metadata?: {
+    user_name?: string;
+  };
+}
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   loading: boolean;
-  signInWithGitHub: () => Promise<void>;
-  signOut: () => Promise<void>;
+  signIn: (email: string) => void;
+  signOut: () => void;
   githubToken: string | null;
+  setGithubToken: (token: string | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -21,46 +26,20 @@ export const useAuth = () => {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading] = useState(false);
   const [githubToken, setGithubToken] = useState<string | null>(null);
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setGithubToken(session?.provider_token ?? null);
-        setLoading(false);
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setGithubToken(session?.provider_token ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const signInWithGitHub = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: "github",
-      options: {
-        scopes: "repo",
-        redirectTo: window.location.origin,
-      },
-    });
+  const signIn = (email: string) => {
+    setUser({ email, user_metadata: { user_name: email.split("@")[0] } });
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const signOut = () => {
+    setUser(null);
+    setGithubToken(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signInWithGitHub, signOut, githubToken }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut, githubToken, setGithubToken }}>
       {children}
     </AuthContext.Provider>
   );

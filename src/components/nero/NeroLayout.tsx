@@ -34,7 +34,7 @@ export function NeroLayout() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground truncate max-w-[120px]">
-            {user?.user_metadata?.user_name || user?.email}
+            {user?.email}
           </span>
           <button
             onClick={signOut}
