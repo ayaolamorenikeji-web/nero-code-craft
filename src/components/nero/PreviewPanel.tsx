@@ -1,10 +1,11 @@
 import { useProject } from "@/contexts/ProjectContext";
-import { useMemo } from "react";
-import { Eye, ExternalLink, Copy } from "lucide-react";
+import { useMemo, useEffect, useRef } from "react";
+import { Eye, ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 export function PreviewPanel() {
   const { project } = useProject();
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const htmlContent = useMemo(() => {
     if (!project) return null;
@@ -22,26 +23,32 @@ export function PreviewPanel() {
     if (!htmlFile) return null;
 
     let html = htmlFile.content;
+    
+    // Inject CSS
     if (cssFile) {
-      html = html.replace("</head>", `<style>${cssFile.content}</style></head>`);
+      if (html.includes("</head>")) {
+        html = html.replace("</head>", `<style>${cssFile.content}</style></head>`);
+      } else {
+        html = `<style>${cssFile.content}</style>` + html;
+      }
     }
+    
+    // Inject JS
     if (jsFile) {
-      html = html.replace("</body>", `<script>${jsFile.content}<\/script></body>`);
+      if (html.includes("</body>")) {
+        html = html.replace("</body>", `<script>${jsFile.content}<\/script></body>`);
+      } else {
+        html += `<script>${jsFile.content}<\/script>`;
+      }
     }
+    
     return html;
   }, [project]);
 
-  const previewUrl = useMemo(() => {
-    if (!htmlContent) return null;
-    const blob = new Blob([htmlContent], { type: "text/html" });
-    return URL.createObjectURL(blob);
-  }, [htmlContent]);
-
-  const copyShareLink = () => {
-    // In a real deployment, this would be a hosted URL
-    if (previewUrl) {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success("Link copied! Share with others to show your project.");
+  const refreshPreview = () => {
+    if (iframeRef.current && htmlContent) {
+      iframeRef.current.srcdoc = htmlContent;
+      toast.success("Preview refreshed");
     }
   };
 
@@ -50,7 +57,7 @@ export function PreviewPanel() {
       <div className="flex flex-col items-center justify-center h-full text-center px-6 gap-3">
         <Eye className="w-10 h-10 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">
-          Preview will appear here once Nero generates HTML.
+          Preview will appear here once Nero generates HTML code.
         </p>
       </div>
     );
@@ -62,28 +69,30 @@ export function PreviewPanel() {
         <span className="text-xs text-muted-foreground font-mono">Live Preview</span>
         <div className="flex items-center gap-1">
           <button
-            onClick={copyShareLink}
+            onClick={refreshPreview}
             className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-nero-surface-hover transition-colors"
-            title="Copy share link"
+            title="Refresh preview"
           >
-            <Copy className="w-3.5 h-3.5" />
+            <RefreshCw className="w-3.5 h-3.5" />
           </button>
-          <a
-            href={previewUrl || "#"}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => {
+              const blob = new Blob([htmlContent], { type: "text/html" });
+              window.open(URL.createObjectURL(blob), "_blank");
+            }}
             className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-nero-surface-hover transition-colors"
             title="Open in new tab"
           >
             <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+          </button>
         </div>
       </div>
-      <div className="flex-1">
+      <div className="flex-1 bg-white">
         <iframe
+          ref={iframeRef}
           srcDoc={htmlContent}
-          className="w-full h-full border-0 bg-foreground"
-          sandbox="allow-scripts allow-same-origin"
+          className="w-full h-full border-0"
+          sandbox="allow-scripts allow-same-origin allow-modals allow-popups"
           title="Preview"
         />
       </div>

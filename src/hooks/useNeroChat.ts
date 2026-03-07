@@ -1,23 +1,15 @@
-import { useState, useRef, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useProject, ProjectFile } from "@/contexts/ProjectContext";
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-}
+import { useState, useCallback } from "react";
+import { useProject, ProjectFile, ChatMessage } from "@/contexts/ProjectContext";
 
 export function useNeroChat() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { project, setProject, addFile, addConsoleLog, addChatMessage, createNewProject } = useProject();
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
-  const { addFile, addConsoleLog, project, setProject } = useProject();
-  const abortRef = useRef<AbortController | null>(null);
+
+  const messages = project?.chatMessages || [];
 
   const parseAndAddFiles = useCallback(
     (text: string) => {
-      // Extract code blocks with filenames like ```html filename="index.html"
       const regex = /```(\w+)\s+filename="([^"]+)"\n([\s\S]*?)```/g;
       let match;
       const files: ProjectFile[] = [];
@@ -33,29 +25,25 @@ export function useNeroChat() {
         addFile(file);
         addConsoleLog(`📄 Created: ${file.path}`);
       }
-
-      if (files.length > 0 && !project) {
-        setProject({
-          id: crypto.randomUUID(),
-          name: "Nero Project",
-          files,
-          createdAt: new Date(),
-        });
-      }
-
       return files;
     },
-    [addFile, addConsoleLog, project, setProject]
+    [addFile, addConsoleLog]
   );
 
   const sendMessage = useCallback(
     async (input: string) => {
-      const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: input };
-      setMessages((prev) => [...prev, userMsg]);
+      // Auto-create project if none exists
+      let currentProject = project;
+      if (!currentProject) {
+        currentProject = createNewProject("Nero Project");
+      }
+
+      const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: input };
+      addChatMessage(userMsg);
       setIsLoading(true);
       setStreamingContent("");
 
-      const allMessages = [...messages, userMsg].map((m) => ({
+      const allMessages = [...(currentProject.chatMessages || []), userMsg].map((m) => ({
         role: m.role,
         content: m.content,
       }));
@@ -76,11 +64,8 @@ export function useNeroChat() {
         );
 
         if (!resp.ok || !resp.body) {
-          if (resp.status === 429) {
-            addConsoleLog("⚠️ Rate limited. Try again shortly.");
-          } else if (resp.status === 402) {
-            addConsoleLog("⚠️ Credits needed. Top up in settings.");
-          }
+          if (resp.status === 429) addConsoleLog("⚠️ Rate limited. Try again shortly.");
+          else if (resp.status === 402) addConsoleLog("⚠️ Credits needed.");
           throw new Error(`Request failed: ${resp.status}`);
         }
 
@@ -119,15 +104,14 @@ export function useNeroChat() {
           }
         }
 
-        const assistantMsg: Message = {
+        const assistantMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: "assistant",
           content: assistantContent,
         };
-        setMessages((prev) => [...prev, assistantMsg]);
+        addChatMessage(assistantMsg);
         setStreamingContent("");
 
-        // Parse files from response
         parseAndAddFiles(assistantContent);
       } catch (err) {
         console.error("Chat error:", err);
@@ -136,7 +120,7 @@ export function useNeroChat() {
         setIsLoading(false);
       }
     },
-    [messages, parseAndAddFiles, addConsoleLog]
+    [project, addChatMessage, parseAndAddFiles, addConsoleLog, createNewProject]
   );
 
   return { messages, isLoading, streamingContent, sendMessage };
