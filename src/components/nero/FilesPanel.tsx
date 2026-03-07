@@ -1,9 +1,19 @@
 import { useProject } from "@/contexts/ProjectContext";
 import { FileText, FolderOpen } from "lucide-react";
 import { motion } from "framer-motion";
+import { useCallback } from "react";
 
 export function FilesPanel() {
-  const { project, activeFile, setActiveFile } = useProject();
+  const { project, activeFile, setActiveFile, updateFile } = useProject();
+
+  const handleContentChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      if (activeFile) {
+        updateFile(activeFile.id, e.target.value);
+      }
+    },
+    [activeFile, updateFile]
+  );
 
   if (!project || project.files.length === 0) {
     return (
@@ -38,17 +48,22 @@ export function FilesPanel() {
         </div>
       </div>
 
-      {/* Code view */}
+      {/* Editable code view */}
       <div className="flex-1 overflow-auto nero-scrollbar">
         {activeFile ? (
-          <motion.pre
+          <motion.div
             key={activeFile.id}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="p-4 text-xs font-mono text-secondary-foreground leading-relaxed whitespace-pre-wrap bg-nero-code-bg min-h-full"
+            className="h-full"
           >
-            {activeFile.content}
-          </motion.pre>
+            <textarea
+              value={activeFile.content}
+              onChange={handleContentChange}
+              spellCheck={false}
+              className="w-full h-full p-4 text-xs font-mono text-secondary-foreground leading-relaxed bg-nero-code-bg resize-none outline-none border-none nero-scrollbar"
+            />
+          </motion.div>
         ) : (
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
             Select a file to view
