@@ -154,7 +154,7 @@ export function ChatPanel() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
             <div className="max-w-[85%] rounded-xl px-4 py-3 text-sm bg-nero-surface text-foreground border border-border">
               <div className="prose prose-invert prose-sm max-w-none">
-                {renderMarkdown(streamingContent)}
+                {renderMarkdown(streamingContent, true)}
                 <span className="typing-cursor" />
               </div>
             </div>
