@@ -1,10 +1,8 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect } from "react";
 
 interface User {
   email: string;
-  user_metadata?: {
-    user_name?: string;
-  };
+  user_metadata?: { user_name?: string };
 }
 
 interface AuthContextType {
@@ -25,9 +23,26 @@ export const useAuth = () => {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem("nero-user");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
   const [loading] = useState(false);
-  const [githubToken, setGithubToken] = useState<string | null>(null);
+  const [githubToken, setGithubTokenState] = useState<string | null>(
+    () => localStorage.getItem("nero-github-token")
+  );
+
+  useEffect(() => {
+    if (user) localStorage.setItem("nero-user", JSON.stringify(user));
+    else localStorage.removeItem("nero-user");
+  }, [user]);
+
+  useEffect(() => {
+    if (githubToken) localStorage.setItem("nero-github-token", githubToken);
+    else localStorage.removeItem("nero-github-token");
+  }, [githubToken]);
 
   const signIn = (email: string) => {
     setUser({ email, user_metadata: { user_name: email.split("@")[0] } });
@@ -35,8 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = () => {
     setUser(null);
-    setGithubToken(null);
+    setGithubTokenState(null);
   };
+
+  const setGithubToken = (token: string | null) => setGithubTokenState(token);
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, signOut, githubToken, setGithubToken }}>
