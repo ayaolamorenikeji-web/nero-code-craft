@@ -138,7 +138,19 @@ export function useNeroChat() {
         }
       } catch (err) {
         console.error("Chat error:", err);
-        addConsoleLog(`❌ Error: ${err instanceof Error ? err.message : "Unknown"}`);
+        const errMsg = err instanceof Error ? err.message : "Unknown";
+        addConsoleLog(`❌ Error: ${errMsg}`);
+        
+        // Show error as assistant message so user sees it in chat
+        let userFacingMsg = `⚠️ Something went wrong: ${errMsg}`;
+        if (errMsg.includes("402")) {
+          userFacingMsg = "⚠️ **AI credits have run out.** Please add credits to your Lovable workspace under Settings → Workspace → Usage, then try again.";
+        } else if (errMsg.includes("429")) {
+          userFacingMsg = "⚠️ **Rate limited.** Too many requests — please wait a moment and try again.";
+        }
+        
+        const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: "assistant", content: userFacingMsg };
+        addChatMessage(errorMsg);
       } finally {
         setIsLoading(false);
       }
