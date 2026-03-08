@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Github, Loader2, CheckCircle, Key, Download, FolderInput } from "lucide-react";
+import { Github, Loader2, CheckCircle, Key, Download, FolderInput, GitCommit, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useProject, ProjectFile } from "@/contexts/ProjectContext";
 
@@ -8,12 +8,15 @@ export function GitHubPanel() {
   const { githubToken, setGithubToken } = useAuth();
   const { project, addFile, addConsoleLog } = useProject();
   const [repoName, setRepoName] = useState("");
+  const [commitMsg, setCommitMsg] = useState("Update via Nero AI");
   const [tokenInput, setTokenInput] = useState("");
   const [pushing, setPushing] = useState(false);
   const [pushed, setPushed] = useState(false);
   const [importRepo, setImportRepo] = useState("");
   const [importing, setImporting] = useState(false);
   const [mode, setMode] = useState<"push" | "import">("push");
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [selectAll, setSelectAll] = useState(true);
 
   const saveToken = () => {
     if (tokenInput.trim()) {
@@ -23,9 +26,38 @@ export function GitHubPanel() {
     }
   };
 
+  const toggleFile = (fileId: string) => {
+    setSelectedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileId)) next.delete(fileId); else next.add(fileId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectAll) {
+      setSelectedFiles(new Set());
+    } else {
+      setSelectedFiles(new Set(project?.files.map((f) => f.id) || []));
+    }
+    setSelectAll(!selectAll);
+  };
+
+  // Initialize selected files when project changes
+  const files = project?.files || [];
+  if (files.length > 0 && selectedFiles.size === 0 && selectAll) {
+    const allIds = new Set(files.map((f) => f.id));
+    if (allIds.size !== selectedFiles.size) {
+      // Will set on next render cycle
+      setTimeout(() => setSelectedFiles(allIds), 0);
+    }
+  }
+
+  const filesToPush = files.filter((f) => selectedFiles.has(f.id));
+
   const pushToGitHub = async () => {
-    if (!githubToken || !project || !repoName.trim()) {
-      toast.error("Missing token, project, or repo name");
+    if (!githubToken || !project || !repoName.trim() || filesToPush.length === 0) {
+      toast.error("Missing token, project, repo name, or no files selected");
       return;
     }
 
@@ -43,19 +75,40 @@ export function GitHubPanel() {
       const userData = await userRes.json();
       const fullName = `${userData.login}/${repoName}`;
 
-      for (const file of project.files) {
+      addConsoleLog(`📤 Pushing ${filesToPush.length} file(s) to ${fullName}...`);
+
+      for (const file of filesToPush) {
+        // Check if file exists (to get SHA for updates)
+        let sha: string | undefined;
+        try {
+          const existRes = await fetch(`https://api.github.com/repos/${fullName}/contents/${file.path}`, {
+            headers: { Authorization: `token ${githubToken}` },
+          });
+          if (existRes.ok) {
+            const existData = await existRes.json();
+            sha = existData.sha;
+          }
+        } catch {}
+
         await fetch(`https://api.github.com/repos/${fullName}/contents/${file.path}`, {
           method: "PUT",
           headers: { Authorization: `token ${githubToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ message: `Add ${file.path} via Nero AI`, content: btoa(unescape(encodeURIComponent(file.content))) }),
+          body: JSON.stringify({
+            message: `${commitMsg} — ${file.path}`,
+            content: btoa(unescape(encodeURIComponent(file.content))),
+            ...(sha ? { sha } : {}),
+          }),
         });
+        addConsoleLog(`  ✓ ${file.path}`);
       }
 
       setPushed(true);
-      toast.success(`Pushed to github.com/${fullName}`);
+      toast.success(`Pushed ${filesToPush.length} files to github.com/${fullName}`);
+      addConsoleLog(`✅ Push complete: github.com/${fullName}`);
     } catch (err) {
       console.error(err);
       toast.error("Failed to push to GitHub");
+      addConsoleLog(`❌ Push failed: ${err instanceof Error ? err.message : "Unknown"}`);
     } finally {
       setPushing(false);
     }
@@ -70,52 +123,46 @@ export function GitHubPanel() {
     setImporting(true);
     try {
       const repo = importRepo.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
-      
-      // Try to get default branch first
+
       const repoRes = await fetch(`https://api.github.com/repos/${repo}`, {
         headers: { Authorization: `token ${githubToken}`, Accept: "application/vnd.github.v3+json" },
       });
-      
+
       if (!repoRes.ok) {
         const errData = await repoRes.json().catch(() => ({}));
         throw new Error(errData.message || `Repository not found (${repoRes.status})`);
       }
-      
+
       const repoData = await repoRes.json();
       const defaultBranch = repoData.default_branch || "main";
-      
+
       addConsoleLog(`📡 Fetching tree from ${repo} (branch: ${defaultBranch})...`);
 
       const treeRes = await fetch(`https://api.github.com/repos/${repo}/git/trees/${defaultBranch}?recursive=1`, {
         headers: { Authorization: `token ${githubToken}`, Accept: "application/vnd.github.v3+json" },
       });
 
-      if (!treeRes.ok) {
-        throw new Error(`Could not fetch repo tree (${treeRes.status})`);
-      }
-      
+      if (!treeRes.ok) throw new Error(`Could not fetch repo tree (${treeRes.status})`);
+
       const treeData = await treeRes.json();
 
       const blobs = (treeData.tree || []).filter(
-        (item: any) => item.type === "blob" && 
-          !item.path.includes("node_modules/") && 
+        (item: any) => item.type === "blob" &&
+          !item.path.includes("node_modules/") &&
           !item.path.includes(".git/") &&
           !item.path.includes("dist/") &&
           !item.path.includes(".lock") &&
-          item.size < 100000 // Skip files > 100KB
+          item.size < 100000
       );
 
       const textExtensions = [".html", ".css", ".js", ".ts", ".tsx", ".jsx", ".json", ".md", ".txt", ".svg", ".xml", ".yaml", ".yml", ".env.example", ".sh", ".py", ".rb", ".go", ".rs", ".java", ".php", ".vue", ".svelte"];
-      const textBlobs = blobs
-        .filter((b: any) => textExtensions.some((ext) => b.path.endsWith(ext)))
-        .slice(0, 80);
+      const textBlobs = blobs.filter((b: any) => textExtensions.some((ext) => b.path.endsWith(ext))).slice(0, 80);
 
       addConsoleLog(`📥 Importing ${textBlobs.length} files from ${repo}...`);
 
       let imported = 0;
       let failed = 0;
-      
-      // Batch fetch in groups of 5 for speed
+
       for (let i = 0; i < textBlobs.length; i += 5) {
         const batch = textBlobs.slice(i, i + 5);
         const results = await Promise.allSettled(
@@ -131,7 +178,6 @@ export function GitHubPanel() {
               try {
                 content = decodeURIComponent(escape(atob(contentData.content.replace(/\n/g, ""))));
               } catch {
-                // Fallback: try simple atob
                 try { content = atob(contentData.content.replace(/\n/g, "")); } catch { content = contentData.content; }
               }
             } else {
@@ -156,7 +202,7 @@ export function GitHubPanel() {
             return file;
           })
         );
-        
+
         results.forEach((r) => { if (r.status === "fulfilled") imported++; else failed++; });
         addConsoleLog(`  📄 Progress: ${imported}/${textBlobs.length} files...`);
       }
@@ -197,8 +243,9 @@ export function GitHubPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-background p-4 gap-4">
-      <div className="flex rounded-lg border border-border overflow-hidden">
+    <div className="flex flex-col h-full bg-background">
+      {/* Toggle */}
+      <div className="flex rounded-lg border border-border overflow-hidden m-4 mb-0">
         <button
           onClick={() => setMode("push")}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${mode === "push" ? "bg-nero-tab-active text-foreground" : "text-muted-foreground hover:text-foreground"}`}
@@ -214,27 +261,68 @@ export function GitHubPanel() {
       </div>
 
       {mode === "push" ? (
-        <>
-          <p className="text-xs text-muted-foreground">
-            {project?.files.length || 0} file(s) ready to push.
-          </p>
+        <div className="flex flex-col flex-1 overflow-hidden p-4 gap-3">
+          {/* Repo name & commit message */}
           <input
             value={repoName}
             onChange={(e) => setRepoName(e.target.value)}
             placeholder="Repository name"
             className="w-full bg-nero-surface border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
           />
+          <div className="flex items-center gap-2">
+            <GitCommit className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <input
+              value={commitMsg}
+              onChange={(e) => setCommitMsg(e.target.value)}
+              placeholder="Commit message"
+              className="flex-1 bg-nero-surface border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+
+          {/* File selection */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">{filesToPush.length}/{files.length} file(s) staged</span>
+            <button onClick={toggleSelectAll} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+              {selectAll ? "Deselect all" : "Select all"}
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto nero-scrollbar space-y-0.5 border border-border rounded-lg p-2 bg-nero-surface">
+            {files.map((file) => {
+              const isSelected = selectedFiles.has(file.id);
+              return (
+                <label
+                  key={file.id}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs cursor-pointer transition-colors ${
+                    isSelected ? "text-foreground bg-nero-tab-active" : "text-muted-foreground hover:bg-nero-surface-hover"
+                  }`}
+                >
+                  <div
+                    onClick={(e) => { e.preventDefault(); toggleFile(file.id); }}
+                    className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                      isSelected ? "bg-foreground border-foreground" : "border-muted-foreground"
+                    }`}
+                  >
+                    {isSelected && <Check className="w-2.5 h-2.5 text-background" />}
+                  </div>
+                  <span className="truncate font-mono">{file.path}</span>
+                </label>
+              );
+            })}
+            {files.length === 0 && <p className="text-xs text-muted-foreground py-4 text-center">No files to push</p>}
+          </div>
+
           <button
             onClick={pushToGitHub}
-            disabled={pushing || !repoName.trim() || !project?.files.length}
+            disabled={pushing || !repoName.trim() || filesToPush.length === 0}
             className="w-full flex items-center justify-center gap-2 h-11 rounded-lg bg-foreground text-background font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-40"
           >
             {pushing ? <Loader2 className="w-4 h-4 animate-spin" /> : pushed ? <CheckCircle className="w-4 h-4" /> : <Github className="w-4 h-4" />}
-            {pushing ? "Pushing..." : pushed ? "Pushed!" : "Push to GitHub"}
+            {pushing ? "Pushing..." : pushed ? "Pushed!" : `Push ${filesToPush.length} file(s)`}
           </button>
-        </>
+        </div>
       ) : (
-        <>
+        <div className="flex flex-col p-4 gap-3">
           <p className="text-xs text-muted-foreground">
             Import files from a GitHub repo. Supports owner/repo or full URL.
           </p>
@@ -252,15 +340,17 @@ export function GitHubPanel() {
             {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {importing ? "Importing..." : "Import Repo"}
           </button>
-        </>
+        </div>
       )}
 
-      <button
-        onClick={() => { setGithubToken(null); toast.info("Token removed"); }}
-        className="text-xs text-muted-foreground hover:text-foreground transition-colors text-center"
-      >
-        Disconnect GitHub
-      </button>
+      <div className="p-4 pt-0">
+        <button
+          onClick={() => { setGithubToken(null); toast.info("Token removed"); }}
+          className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center"
+        >
+          Disconnect GitHub
+        </button>
+      </div>
     </div>
   );
 }
