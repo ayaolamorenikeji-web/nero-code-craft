@@ -69,60 +69,103 @@ export function GitHubPanel() {
 
     setImporting(true);
     try {
-      // Get repo tree
-      const treeRes = await fetch(`https://api.github.com/repos/${importRepo.trim()}/git/trees/main?recursive=1`, {
-        headers: { Authorization: `token ${githubToken}` },
+      const repo = importRepo.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+      
+      // Try to get default branch first
+      const repoRes = await fetch(`https://api.github.com/repos/${repo}`, {
+        headers: { Authorization: `token ${githubToken}`, Accept: "application/vnd.github.v3+json" },
+      });
+      
+      if (!repoRes.ok) {
+        const errData = await repoRes.json().catch(() => ({}));
+        throw new Error(errData.message || `Repository not found (${repoRes.status})`);
+      }
+      
+      const repoData = await repoRes.json();
+      const defaultBranch = repoData.default_branch || "main";
+      
+      addConsoleLog(`📡 Fetching tree from ${repo} (branch: ${defaultBranch})...`);
+
+      const treeRes = await fetch(`https://api.github.com/repos/${repo}/git/trees/${defaultBranch}?recursive=1`, {
+        headers: { Authorization: `token ${githubToken}`, Accept: "application/vnd.github.v3+json" },
       });
 
       if (!treeRes.ok) {
-        // Try master branch
-        const masterRes = await fetch(`https://api.github.com/repos/${importRepo.trim()}/git/trees/master?recursive=1`, {
-          headers: { Authorization: `token ${githubToken}` },
-        });
-        if (!masterRes.ok) throw new Error("Could not fetch repo tree");
-        var treeData = await masterRes.json();
-      } else {
-        var treeData = await treeRes.json();
+        throw new Error(`Could not fetch repo tree (${treeRes.status})`);
       }
+      
+      const treeData = await treeRes.json();
 
       const blobs = (treeData.tree || []).filter(
-        (item: any) => item.type === "blob" && !item.path.includes("node_modules") && !item.path.includes(".git/")
+        (item: any) => item.type === "blob" && 
+          !item.path.includes("node_modules/") && 
+          !item.path.includes(".git/") &&
+          !item.path.includes("dist/") &&
+          !item.path.includes(".lock") &&
+          item.size < 100000 // Skip files > 100KB
       );
 
-      // Limit to text files
-      const textExtensions = [".html", ".css", ".js", ".ts", ".tsx", ".jsx", ".json", ".md", ".txt", ".svg", ".xml", ".yaml", ".yml"];
-      const textBlobs = blobs.filter((b: any) => textExtensions.some((ext) => b.path.endsWith(ext))).slice(0, 50);
+      const textExtensions = [".html", ".css", ".js", ".ts", ".tsx", ".jsx", ".json", ".md", ".txt", ".svg", ".xml", ".yaml", ".yml", ".env.example", ".sh", ".py", ".rb", ".go", ".rs", ".java", ".php", ".vue", ".svelte"];
+      const textBlobs = blobs
+        .filter((b: any) => textExtensions.some((ext) => b.path.endsWith(ext)))
+        .slice(0, 80);
 
-      addConsoleLog(`📥 Importing ${textBlobs.length} files from ${importRepo.trim()}...`);
+      addConsoleLog(`📥 Importing ${textBlobs.length} files from ${repo}...`);
 
-      for (const blob of textBlobs) {
-        const contentRes = await fetch(`https://api.github.com/repos/${importRepo.trim()}/contents/${blob.path}`, {
-          headers: { Authorization: `token ${githubToken}` },
-        });
-        if (!contentRes.ok) continue;
-        const contentData = await contentRes.json();
+      let imported = 0;
+      let failed = 0;
+      
+      // Batch fetch in groups of 5 for speed
+      for (let i = 0; i < textBlobs.length; i += 5) {
+        const batch = textBlobs.slice(i, i + 5);
+        const results = await Promise.allSettled(
+          batch.map(async (blob: any) => {
+            const contentRes = await fetch(`https://api.github.com/repos/${repo}/contents/${blob.path}?ref=${defaultBranch}`, {
+              headers: { Authorization: `token ${githubToken}`, Accept: "application/vnd.github.v3+json" },
+            });
+            if (!contentRes.ok) throw new Error(`Failed to fetch ${blob.path}`);
+            const contentData = await contentRes.json();
 
-        let content = "";
-        try { content = decodeURIComponent(escape(atob(contentData.content.replace(/\n/g, "")))); } catch { content = contentData.content; }
+            let content = "";
+            if (contentData.encoding === "base64" && contentData.content) {
+              try {
+                content = decodeURIComponent(escape(atob(contentData.content.replace(/\n/g, ""))));
+              } catch {
+                // Fallback: try simple atob
+                try { content = atob(contentData.content.replace(/\n/g, "")); } catch { content = contentData.content; }
+              }
+            } else {
+              content = contentData.content || "";
+            }
 
-        const ext = blob.path.split(".").pop() || "text";
-        const langMap: Record<string, string> = { html: "html", css: "css", js: "javascript", ts: "typescript", tsx: "tsx", jsx: "jsx", json: "json", md: "markdown" };
+            const ext = blob.path.split(".").pop() || "text";
+            const langMap: Record<string, string> = {
+              html: "html", css: "css", js: "javascript", ts: "typescript", tsx: "tsx", jsx: "jsx",
+              json: "json", md: "markdown", py: "python", rb: "ruby", go: "go", rs: "rust",
+              java: "java", php: "php", vue: "vue", svelte: "svelte", sh: "bash", yaml: "yaml", yml: "yaml"
+            };
 
-        const file: ProjectFile = {
-          id: crypto.randomUUID(),
-          name: blob.path.split("/").pop() || blob.path,
-          path: blob.path,
-          content,
-          language: langMap[ext] || ext,
-        };
-        addFile(file);
+            const file: ProjectFile = {
+              id: crypto.randomUUID(),
+              name: blob.path.split("/").pop() || blob.path,
+              path: blob.path,
+              content,
+              language: langMap[ext] || ext,
+            };
+            addFile(file);
+            return file;
+          })
+        );
+        
+        results.forEach((r) => { if (r.status === "fulfilled") imported++; else failed++; });
+        addConsoleLog(`  📄 Progress: ${imported}/${textBlobs.length} files...`);
       }
 
-      addConsoleLog(`✅ Imported ${textBlobs.length} files from ${importRepo.trim()}`);
-      toast.success(`Imported ${textBlobs.length} files`);
+      addConsoleLog(`✅ Imported ${imported} files from ${repo}${failed > 0 ? ` (${failed} failed)` : ""}`);
+      toast.success(`Imported ${imported} files from ${repo}`);
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to import repo");
+      console.error("GitHub import error:", err);
+      toast.error(`Import failed: ${err instanceof Error ? err.message : "Unknown error"}`);
       addConsoleLog(`❌ Import failed: ${err instanceof Error ? err.message : "Unknown"}`);
     } finally {
       setImporting(false);
@@ -155,7 +198,6 @@ export function GitHubPanel() {
 
   return (
     <div className="flex flex-col h-full bg-background p-4 gap-4">
-      {/* Toggle */}
       <div className="flex rounded-lg border border-border overflow-hidden">
         <button
           onClick={() => setMode("push")}
@@ -194,12 +236,12 @@ export function GitHubPanel() {
       ) : (
         <>
           <p className="text-xs text-muted-foreground">
-            Import files from a GitHub repo. AI will read and understand the code.
+            Import files from a GitHub repo. Supports owner/repo or full URL.
           </p>
           <input
             value={importRepo}
             onChange={(e) => setImportRepo(e.target.value)}
-            placeholder="owner/repo (e.g. facebook/react)"
+            placeholder="owner/repo or https://github.com/owner/repo"
             className="w-full bg-nero-surface border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring font-mono"
           />
           <button

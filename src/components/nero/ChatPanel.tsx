@@ -178,7 +178,7 @@ export function ChatPanel() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+            onKeyDown={(e) => { /* Enter does not send; use button */ }}
             placeholder="Describe what you want to build..."
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground py-3 outline-none"
             disabled={isLoading}
