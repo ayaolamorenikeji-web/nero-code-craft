@@ -81,10 +81,10 @@ export function ChatPanel() {
     setInput("");
   };
 
-  const renderMarkdown = (content: string) => (
+  const renderMarkdown = (content: string, isStreaming = false) => (
     <ReactMarkdown
       components={{
-        pre: ({ children }) => <CollapsibleCode>{children}</CollapsibleCode>,
+        pre: ({ children }) => isStreaming ? <div className="my-2">{children}</div> : <CollapsibleCode>{children}</CollapsibleCode>,
         code: ({ className, children, ...props }) => {
           const isInline = !className;
           if (isInline) return <code className="font-mono text-xs bg-nero-code-bg px-1 py-0.5 rounded" {...props}>{children}</code>;
@@ -154,7 +154,7 @@ export function ChatPanel() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
             <div className="max-w-[85%] rounded-xl px-4 py-3 text-sm bg-nero-surface text-foreground border border-border">
               <div className="prose prose-invert prose-sm max-w-none">
-                {renderMarkdown(streamingContent)}
+                {renderMarkdown(streamingContent, true)}
                 <span className="typing-cursor" />
               </div>
             </div>
