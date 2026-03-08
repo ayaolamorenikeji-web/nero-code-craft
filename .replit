@@ -1,0 +1,8 @@
+run = "npm install && npm run dev"
+entrypoint = "src/main.tsx"
+
+[nix]
+channel = "stable-24_05"
+
+[env]
+VITE_PORT = "8080"
