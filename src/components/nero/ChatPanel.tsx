@@ -81,10 +81,10 @@ export function ChatPanel() {
     setInput("");
   };
 
-  const renderMarkdown = (content: string) => (
+  const renderMarkdown = (content: string, isStreaming = false) => (
     <ReactMarkdown
       components={{
-        pre: ({ children }) => <CollapsibleCode>{children}</CollapsibleCode>,
+        pre: ({ children }) => isStreaming ? <div className="my-2">{children}</div> : <CollapsibleCode>{children}</CollapsibleCode>,
         code: ({ className, children, ...props }) => {
           const isInline = !className;
           if (isInline) return <code className="font-mono text-xs bg-nero-code-bg px-1 py-0.5 rounded" {...props}>{children}</code>;
