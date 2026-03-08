@@ -174,23 +174,35 @@ export function ChatPanel() {
 
       {/* Input */}
       <div className="border-t border-border p-3">
-        <div className="flex items-center gap-2 bg-nero-surface rounded-xl border border-border px-3">
-          <input
+        <div className="flex items-end gap-2 bg-nero-surface rounded-xl border border-border px-3">
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { /* Enter does not send; use button */ }}
-            placeholder="Describe what you want to build..."
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground py-3 outline-none"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder="Describe what you want to build... (Shift+Enter to send)"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground py-3 outline-none resize-none min-h-[44px] max-h-32"
+            rows={1}
             disabled={isLoading}
+            onInput={(e) => {
+              const el = e.currentTarget;
+              el.style.height = "auto";
+              el.style.height = Math.min(el.scrollHeight, 128) + "px";
+            }}
           />
           <button
             onClick={handleSend}
             disabled={isLoading || !input.trim()}
-            className="p-2 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+            className="p-2 mb-1.5 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
           >
             <Send className="w-4 h-4" />
           </button>
         </div>
+        <p className="text-[10px] text-muted-foreground mt-1.5 text-center">Shift + Enter to send · Enter for new line</p>
       </div>
     </div>
   );
