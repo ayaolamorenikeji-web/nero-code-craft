@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { Terminal } from "lucide-react";
+import { useProject, ProjectFile } from "@/contexts/ProjectContext";
 
 interface ShellLine {
   type: "input" | "output" | "error";
   text: string;
 }
 
-// Simulated shell that handles common web-dev commands
-function executeCommand(cmd: string, files: { path: string; content: string }[]): string {
+function executeCommand(cmd: string, files: ProjectFile[]): string {
   const parts = cmd.trim().split(/\s+/);
   const command = parts[0]?.toLowerCase();
 
@@ -69,9 +69,6 @@ export function ShellPanel() {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // We import useProject lazily to get files
-  const { useProject } = require("@/contexts/ProjectContext");
   const { project } = useProject();
 
   useEffect(() => {
