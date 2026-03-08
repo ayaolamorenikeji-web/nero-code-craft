@@ -228,41 +228,120 @@ function executeCommand(cmd: string, files: ProjectFile[], env: Record<string, s
       return args[0] ? `(removed: ${args[0]})` : { text: "Usage: rm <filename>", type: "error" };
 
     case "node": {
-      if (args[0] !== "-e" || !args[1]) return { text: "Usage: node -e \"<code>\"", type: "error" };
-      const code = args.slice(1).join(" ");
-      try {
-        const logs: string[] = [];
-        const mockConsole = { log: (...a: any[]) => logs.push(a.map(String).join(" ")), error: (...a: any[]) => logs.push(a.map(String).join(" ")) };
-        const fn = new Function("console", "Math", "JSON", "Date", "Array", "Object", "String", "Number", "Boolean", "parseInt", "parseFloat", "isNaN", code);
-        const result = fn(mockConsole, Math, JSON, Date, Array, Object, String, Number, Boolean, parseInt, parseFloat, isNaN);
-        if (logs.length) return logs.join("\n");
-        return result !== undefined ? String(result) : "";
-      } catch (e) {
-        return { text: `Error: ${e instanceof Error ? e.message : String(e)}`, type: "error" };
+      if (args[0] === "-e" || args[0] === "--eval") {
+        const code = args.slice(1).join(" ");
+        if (!code) return { text: "Usage: node -e \"<code>\"", type: "error" };
+        try {
+          const logs: string[] = [];
+          const mockConsole = {
+            log: (...a: any[]) => logs.push(a.map((v) => typeof v === "object" ? JSON.stringify(v, null, 2) : String(v)).join(" ")),
+            error: (...a: any[]) => logs.push("Error: " + a.map(String).join(" ")),
+            warn: (...a: any[]) => logs.push("Warning: " + a.map(String).join(" ")),
+            info: (...a: any[]) => logs.push(a.map(String).join(" ")),
+            table: (data: any) => logs.push(JSON.stringify(data, null, 2)),
+          };
+          const mockRequire = (mod: string) => {
+            if (mod === "path") return { join: (...p: string[]) => p.join("/"), basename: (p: string) => p.split("/").pop(), dirname: (p: string) => p.split("/").slice(0, -1).join("/"), extname: (p: string) => "." + p.split(".").pop() };
+            if (mod === "fs") return { readFileSync: (p: string) => { const f = files.find((f) => f.path === p || f.name === p); return f ? f.content : ""; }, readdirSync: () => files.map((f) => f.path), existsSync: (p: string) => files.some((f) => f.path === p) };
+            throw new Error(`Module '${mod}' not available in virtual shell`);
+          };
+          const fn = new Function("console", "require", "Math", "JSON", "Date", "Array", "Object", "String", "Number", "Boolean", "parseInt", "parseFloat", "isNaN", "setTimeout", "Promise", "Map", "Set", "RegExp", code);
+          const result = fn(mockConsole, mockRequire, Math, JSON, Date, Array, Object, String, Number, Boolean, parseInt, parseFloat, isNaN, () => {}, Promise, Map, Set, RegExp);
+          if (logs.length) return logs.join("\n");
+          return result !== undefined ? String(result) : "";
+        } catch (e) {
+          return { text: `${e instanceof Error ? e.message : String(e)}`, type: "error" };
+        }
       }
+      // node <filename> — run a JS file from project
+      const target = args[0];
+      if (target) {
+        const file = files.find((f) => f.path === target || f.name === target);
+        if (!file) return { text: `node: ${target}: No such file`, type: "error" };
+        try {
+          const logs: string[] = [];
+          const mockConsole = { log: (...a: any[]) => logs.push(a.map((v) => typeof v === "object" ? JSON.stringify(v, null, 2) : String(v)).join(" ")), error: (...a: any[]) => logs.push("Error: " + a.map(String).join(" ")) };
+          const fn = new Function("console", "Math", "JSON", "Date", "Array", "Object", file.content);
+          fn(mockConsole, Math, JSON, Date, Array, Object);
+          return logs.join("\n") || "(no output)";
+        } catch (e) {
+          return { text: `${e instanceof Error ? e.message : String(e)}`, type: "error" };
+        }
+      }
+      return "Node.js v20.0.0 (virtual)\nUsage: node -e \"<code>\" or node <filename>";
+    }
+
+    case "npm": {
+      const subcmd = args[0];
+      if (subcmd === "init") return "Wrote to /nero-project/package.json\n\n{ \"name\": \"nero-project\", \"version\": \"1.0.0\" }";
+      if (subcmd === "install" || subcmd === "i") {
+        const pkg = args[1];
+        if (!pkg) return "npm install: installing dependencies...\nadded 0 packages in 0.5s";
+        return `+ ${pkg}@latest\nadded 1 package in 0.3s`;
+      }
+      if (subcmd === "run") {
+        const script = args[1];
+        if (!script) return { text: "Usage: npm run <script>", type: "error" };
+        if (script === "dev" || script === "start") return "Starting development server...\n\n  ➜  Local: http://localhost:3000/\n  ➜  Use the Preview tab to see your app";
+        if (script === "build") return "Building for production...\n✓ Built in 1.2s\n  dist/index.html  0.5 kB\n  dist/assets/*.js  12.3 kB";
+        return `npm run ${script}: script not found`;
+      }
+      if (subcmd === "list" || subcmd === "ls") return "nero-project@1.0.0\n└── (no dependencies)";
+      if (subcmd === "version" || subcmd === "-v") return "10.0.0";
+      return "Usage: npm <init|install|run|list|version>";
+    }
+
+    case "npx": {
+      const tool = args[0];
+      if (!tool) return { text: "Usage: npx <package> [args]", type: "error" };
+      if (tool === "create-react-app" || tool === "create-vite") return "Use Nero AI chat to generate a full app instead!\nTry: \"Build me a React app with...\"";
+      return `npx: executing ${tool}...\n(virtual environment — use Nero AI for full code generation)`;
     }
 
     case "python": {
-      if (args[0] !== "-c" || !args[1]) return { text: "Usage: python -c \"<expression>\"", type: "error" };
-      const expr = args.slice(1).join(" ");
-      // Very basic Python-like eval for math expressions
-      try {
-        const jsExpr = expr
-          .replace(/print\(([^)]+)\)/g, "$1")
-          .replace(/\*\*/g, "**")
-          .replace(/True/g, "true")
-          .replace(/False/g, "false")
-          .replace(/None/g, "null")
-          .replace(/len\(([^)]+)\)/g, "$1.length");
-        const result = new Function(`return ${jsExpr}`)();
-        return String(result);
-      } catch (e) {
-        return { text: `Error: ${e instanceof Error ? e.message : String(e)}`, type: "error" };
+      if (args[0] === "-c") {
+        const expr = args.slice(1).join(" ");
+        if (!expr) return { text: "Usage: python -c \"<expression>\"", type: "error" };
+        try {
+          const jsExpr = expr
+            .replace(/print\(([^)]+)\)/g, "($1)")
+            .replace(/\*\*/g, "**")
+            .replace(/True/g, "true")
+            .replace(/False/g, "false")
+            .replace(/None/g, "null")
+            .replace(/len\(([^)]+)\)/g, "$1.length")
+            .replace(/str\(([^)]+)\)/g, "String($1)")
+            .replace(/int\(([^)]+)\)/g, "parseInt($1)")
+            .replace(/float\(([^)]+)\)/g, "parseFloat($1)");
+          const result = new Function(`return ${jsExpr}`)();
+          return String(result);
+        } catch (e) {
+          return { text: `Error: ${e instanceof Error ? e.message : String(e)}`, type: "error" };
+        }
       }
+      return "Python 3.11.0 (virtual)\nUsage: python -c \"<expression>\"";
     }
 
+    case "pip":
+      return args[0] === "install" ? `Successfully installed ${args.slice(1).join(" ") || "nothing"}` : "Usage: pip install <package>";
+
     case "curl":
-      return { text: "curl: network requests not supported in virtual shell. Use the app's GitHub import instead.", type: "error" };
+      return { text: "curl: network requests not supported in virtual shell. Use the GitHub Import tab instead.", type: "error" };
+
+    case "wget":
+      return { text: "wget: network requests not supported in virtual shell.", type: "error" };
+
+    case "apt":
+    case "apt-get":
+      if (args[0] === "install") return `Reading package lists... Done\nSetting up ${args.slice(1).join(" ")}...\n(virtual - package simulated)`;
+      if (args[0] === "update") return "Hit:1 http://archive.ubuntu.com/ubuntu focal InRelease\nReading package lists... Done";
+      return "Usage: apt <update|install>";
+
+    case "chmod":
+      return args.length >= 2 ? `mode of '${args[args.length - 1]}' changed` : { text: "Usage: chmod <mode> <file>", type: "error" };
+
+    case "chown":
+      return args.length >= 2 ? `ownership of '${args[args.length - 1]}' changed` : { text: "Usage: chown <owner> <file>", type: "error" };
 
     case "clear":
       return "__CLEAR__";
