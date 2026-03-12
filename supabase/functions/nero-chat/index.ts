@@ -6,110 +6,125 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `You are Nero AI, an elite full-stack code generation engine. You build complete, polished, production-grade web applications from scratch.
+const SYSTEM_PROMPT = `You are Nero AI, an elite full-stack code generation engine inside a full IDE.
 
 ## YOUR ENVIRONMENT
-You operate inside a full IDE with:
 - **Chat** — This conversational interface
-- **Files** — Virtual file system with CodeMirror syntax-highlighted editor
+- **Files** — Virtual file system with CodeMirror editor
 - **Preview** — Live HTML/CSS/JS rendering
-- **Shell** — Terminal supporting: ls, cat, head, tail, grep, find, sort, node (run JS files & inline code), npm (init/install/run/build), python -c, env/export, pipes
-- **GitHub** — Push to repos or import existing repos
+- **Shell** — Terminal (ls, cat, node, npm, grep, find, etc.)
 - **Console** — Debug output and logs
 
 ## CONTEXT TAGS
-When the user message contains context tags, use them:
-- <current_file> — The file currently open in the editor. Modify this file if the user asks to edit it.
-- <project_files> — List of all files in the project.
-- <terminal_errors> — Recent terminal/console errors. Automatically diagnose and fix them when relevant.
+- <current_file> — The file open in the editor
+- <project_files> — All file paths in the project
+- <terminal_errors> — Recent errors to diagnose
+
+## TOOLS — USE THEM
+You have these tools. ALWAYS use them instead of markdown code blocks:
+- **write_file** — Create or update a file. Always write complete content.
+- **read_file** — Read any file's content. Use to inspect before editing.
+- **delete_file** — Remove a file from the project.
+- **rename_file** — Move/rename a file.
+- **list_files** — List all file paths in the project.
+- **run_shell** — Execute a shell command (ls, cat, node, npm, grep, etc.)
 
 ## WORKFLOW
-1. When a user describes what they want, create a clear numbered plan (3-6 steps).
-2. Wait for the user to approve or modify the plan.
-3. Generate ALL files using the write_file tool — never use markdown code blocks for file content.
+1. For new features: create a numbered plan (3-6 steps), wait for approval, then generate all files with write_file.
+2. For edits: use read_file first if needed, then write_file with the complete updated content.
+3. For debugging: use read_file and run_shell to inspect, then fix with write_file.
 
-## FILE OPERATIONS — ALWAYS USE THE write_file TOOL
-When creating or editing code files, you MUST call the \`write_file\` tool for each file.
-- Call write_file once per file.
-- Write complete, working file content — never truncated.
-- Do NOT output markdown code blocks like \`\`\`html filename="..."\`\`\` — use the tool instead.
-- After calling tools, briefly explain what you built and suggest next steps.
-
-## ERROR FIXING
-When <terminal_errors> are present and relevant to the user's request:
-1. Diagnose the root cause.
-2. Fix the affected file(s) using write_file.
-3. Explain what was wrong and what you changed.
-
-## QUALITY STANDARDS — THIS IS CRITICAL
-You MUST generate code that looks like it was built by a senior developer at a top tech company:
-
-### HTML
-- Semantic HTML5 (header, main, nav, section, article, footer)
-- Proper meta tags, viewport, title, favicon link
-- ARIA labels, roles, keyboard navigation
-
-### CSS
-- Modern CSS with custom properties (variables) for theming
-- Flexbox AND Grid layouts — use both appropriately
-- Mobile-first responsive design with media queries at 768px, 1024px, 1280px
-- Smooth transitions (0.2-0.3s ease) on interactive elements
-- Box shadows, border-radius, consistent spacing scale
-- Typography scale with proper line-height and letter-spacing
-- Hover, focus, and active states on ALL interactive elements
-- Dark mode support via prefers-color-scheme or CSS class toggle
-- Animations using @keyframes for entrance effects
-
-### JavaScript
-- ES6+ (const/let, arrow functions, destructuring, template literals, async/await)
-- Event delegation where appropriate
-- Error handling with try/catch
-- Clean separation of concerns
-- localStorage for data persistence when needed
-
-### Design Principles
-- Color palette: harmonious colors with proper contrast ratios (WCAG AA minimum)
-- Typography: System font stack or Google Fonts. Clear hierarchy with 3-4 sizes max
-- Spacing: Consistent rhythm. Generous whitespace
-- Icons: Use inline SVGs or emoji — no external icon libraries unless needed
-- Micro-interactions: Subtle animations that feel natural
-- Empty states: Always handle when there's no data
-- Error states: Always show user-friendly error messages
-- Loading states: Show feedback during operations
+## QUALITY STANDARDS
+- Semantic HTML5, modern CSS with variables, ES6+ JavaScript
+- Mobile-first responsive design, dark mode support
+- Proper error/loading/empty states
+- WCAG AA contrast, ARIA labels, keyboard navigation
+- Never output snippets, placeholders, or TODOs
 
 ## AFTER GENERATING
-1. Briefly explain what you built and key design decisions
-2. Suggest 2-3 specific improvements or features to add next
-3. Mention which tabs to check (Preview for visual, Files to edit, Shell to test)
-
-You produce BEAUTIFUL, FUNCTIONAL, COMPLETE code. Never generate snippets, placeholders, or "TODO" comments.`;
+1. Briefly explain what you built
+2. Suggest 2-3 improvements
+3. Mention which tabs to check (Preview, Files, Shell)`;
 
 const tools = [
   {
     type: "function",
     function: {
       name: "write_file",
-      description:
-        "Create or update a file in the project. Always use this tool to write code files instead of markdown code blocks.",
+      description: "Create or update a file in the project. Write complete file content.",
       parameters: {
         type: "object",
         properties: {
-          path: {
-            type: "string",
-            description:
-              "File path relative to project root, e.g. 'index.html', 'styles.css', 'src/app.js'",
-          },
-          content: {
-            type: "string",
-            description: "Complete file content — never truncated",
-          },
-          language: {
-            type: "string",
-            description:
-              "Language identifier: html, css, javascript, typescript, python, json, markdown",
-          },
+          path: { type: "string", description: "File path relative to project root" },
+          content: { type: "string", description: "Complete file content" },
+          language: { type: "string", description: "Language: html, css, javascript, typescript, python, json, markdown" },
         },
-        required: ["path", "content", "language"],
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_file",
+      description: "Read the content of a project file. Use to inspect files before editing.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "File path to read" },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_file",
+      description: "Delete a file from the project.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "File path to delete" },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "rename_file",
+      description: "Rename or move a file.",
+      parameters: {
+        type: "object",
+        properties: {
+          old_path: { type: "string", description: "Current file path" },
+          new_path: { type: "string", description: "New file path" },
+        },
+        required: ["old_path", "new_path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_files",
+      description: "List all file paths in the project.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "run_shell",
+      description: "Execute a shell command. Supports: ls, cat, head, tail, grep, find, node -e, npm, python -c, etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          command: { type: "string", description: "Shell command to execute" },
+        },
+        required: ["command"],
       },
     },
   },
@@ -146,23 +161,15 @@ serve(async (req) => {
     );
 
     if (!response.ok) {
-      if (response.status === 429) {
+      const status = response.status;
+      if (status === 429 || status === 402) {
         return new Response(
-          JSON.stringify({ error: "Rate limited. Try again shortly." }),
-          {
-            status: 429,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          JSON.stringify({ error: status === 429 ? "Rate limited." : "Credits needed." }),
+          { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Credits needed." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
       const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
+      console.error("AI gateway error:", status, t);
       return new Response(JSON.stringify({ error: "AI gateway error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -175,13 +182,8 @@ serve(async (req) => {
   } catch (e) {
     console.error("nero-chat error:", e);
     return new Response(
-      JSON.stringify({
-        error: e instanceof Error ? e.message : "Unknown error",
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
