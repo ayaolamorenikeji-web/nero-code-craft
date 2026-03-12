@@ -28,6 +28,7 @@ export function useNeroChat() {
   const [streamingContent, setStreamingContent] = useState("");
   const [pendingPlan, setPendingPlan] = useState<string[] | null>(null);
   const [pendingInput, setPendingInput] = useState("");
+  const [toolActivity, setToolActivity] = useState<{ name: string; detail: string }[]>([]);
 
   const messages = project?.chatMessages || [];
 
