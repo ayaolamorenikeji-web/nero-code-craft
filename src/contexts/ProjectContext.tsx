@@ -34,6 +34,8 @@ interface ProjectContextType {
   setActiveFile: (f: ProjectFile | null) => void;
   updateFile: (id: string, content: string) => void;
   addFile: (file: ProjectFile) => void;
+  deleteFile: (path: string) => void;
+  renameFile: (oldPath: string, newPath: string) => void;
   addChatMessage: (msg: ChatMessage) => void;
   consoleOutput: string[];
   addConsoleLog: (msg: string) => void;
