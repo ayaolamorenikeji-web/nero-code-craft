@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNeroChat } from "@/hooks/useNeroChat";
-import { Send, Zap, ChevronDown, ChevronRight, Check, Edit2 } from "lucide-react";
+import { Send, Zap, ChevronDown, ChevronRight, Check, Edit2, FileText, Eye, Trash2, ArrowRight, FolderOpen, Terminal } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
 
