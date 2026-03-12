@@ -66,8 +66,17 @@ function PlanView({ plan, onApprove, onEdit }: {
   );
 }
 
+const TOOL_META: Record<string, { icon: typeof FileText; label: string; color: string }> = {
+  write_file: { icon: FileText, label: "Writing", color: "text-green-400" },
+  read_file: { icon: Eye, label: "Reading", color: "text-blue-400" },
+  delete_file: { icon: Trash2, label: "Deleting", color: "text-red-400" },
+  rename_file: { icon: ArrowRight, label: "Renaming", color: "text-yellow-400" },
+  list_files: { icon: FolderOpen, label: "Listing files", color: "text-purple-400" },
+  run_shell: { icon: Terminal, label: "Running", color: "text-orange-400" },
+};
+
 export function ChatPanel() {
-  const { messages, isLoading, streamingContent, sendMessage, pendingPlan, approvePlan, editPlan } = useNeroChat();
+  const { messages, isLoading, streamingContent, sendMessage, pendingPlan, approvePlan, editPlan, toolActivity } = useNeroChat();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
