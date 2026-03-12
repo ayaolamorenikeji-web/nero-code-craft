@@ -365,5 +365,5 @@ export function useNeroChat() {
     [approvePlan]
   );
 
-  return { messages, isLoading, streamingContent, sendMessage, pendingPlan, approvePlan, editPlan };
+  return { messages, isLoading, streamingContent, sendMessage, pendingPlan, approvePlan, editPlan, toolActivity };
 }
