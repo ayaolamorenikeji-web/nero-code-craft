@@ -170,7 +170,38 @@ export function ChatPanel() {
           </motion.div>
         )}
 
-        {isLoading && !streamingContent && (
+        {/* Tool Activity Indicator */}
+        {isLoading && toolActivity.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
+            <div className="max-w-[85%] rounded-xl px-3 py-2 bg-nero-surface border border-border space-y-1">
+              {toolActivity.map((t, i) => {
+                const meta = TOOL_META[t.name] || { icon: Zap, label: t.name, color: "text-muted-foreground" };
+                const Icon = meta.icon;
+                const isLatest = i === toolActivity.length - 1;
+                return (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: isLatest ? 1 : 0.5, x: 0 }}
+                    className={`flex items-center gap-2 text-[11px] font-mono ${isLatest ? meta.color : "text-muted-foreground"}`}
+                  >
+                    {isLatest ? (
+                      <Icon className="w-3 h-3 animate-pulse" />
+                    ) : (
+                      <Check className="w-3 h-3 text-muted-foreground" />
+                    )}
+                    <span>{meta.label}</span>
+                    {t.detail && (
+                      <span className="text-muted-foreground truncate max-w-[180px]">{t.detail}</span>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+
+        {isLoading && !streamingContent && toolActivity.length === 0 && (
           <div className="flex justify-start">
             <div className="bg-nero-surface border border-border rounded-xl px-4 py-3 flex gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground pulse-dot" />
