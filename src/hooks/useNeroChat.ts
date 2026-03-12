@@ -290,6 +290,7 @@ export function useNeroChat() {
       setIsLoading(true);
       setStreamingContent("");
       setPendingPlan(null);
+      setToolActivity([]);
 
       const allMessages = [
         ...(currentProject.chatMessages || []).map((m) => ({ role: m.role, content: m.content })),
