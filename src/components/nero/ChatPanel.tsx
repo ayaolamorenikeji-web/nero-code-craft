@@ -82,7 +82,7 @@ export function ChatPanel() {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, streamingContent, pendingPlan]);
+  }, [messages, streamingContent, pendingPlan, toolActivity]);
 
   const handleSend = () => {
     if (!input.trim() || isLoading) return;
