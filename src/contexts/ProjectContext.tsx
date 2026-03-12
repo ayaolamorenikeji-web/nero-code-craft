@@ -154,6 +154,37 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     );
   }, [activeProjectId]);
 
+  const deleteFileFromActive = useCallback((path: string) => {
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== activeProjectId) return p;
+        return { ...p, files: p.files.filter((f) => f.path !== path) };
+      })
+    );
+    setActiveFile((prev) => (prev?.path === path ? null : prev));
+  }, [activeProjectId]);
+
+  const renameFileInActive = useCallback((oldPath: string, newPath: string) => {
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== activeProjectId) return p;
+        return {
+          ...p,
+          files: p.files.map((f) =>
+            f.path === oldPath
+              ? { ...f, path: newPath, name: newPath.split("/").pop() || newPath }
+              : f
+          ),
+        };
+      })
+    );
+    setActiveFile((prev) =>
+      prev?.path === oldPath
+        ? { ...prev, path: newPath, name: newPath.split("/").pop() || newPath }
+        : prev
+    );
+  }, [activeProjectId]);
+
   const addConsoleLog = useCallback((msg: string) => {
     setConsoleOutput((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
   }, []);
@@ -165,7 +196,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       value={{
         projects, project, setProject, createNewProject, switchProject,
         deleteProject, renameProject, activeFile, setActiveFile, updateFile,
-        addFile: addFileToActive, addChatMessage, consoleOutput, addConsoleLog, clearConsole,
+        addFile: addFileToActive, deleteFile: deleteFileFromActive, renameFile: renameFileInActive,
+        addChatMessage, consoleOutput, addConsoleLog, clearConsole,
       }}
     >
       {children}
