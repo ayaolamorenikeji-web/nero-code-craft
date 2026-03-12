@@ -137,8 +137,12 @@ export function useNeroChat() {
       for (const tc of toolCalls) {
         try {
           const args = tc.arguments ? JSON.parse(tc.arguments) : {};
+          const toolLabel = (name: string, detail: string) => {
+            setToolActivity((prev) => [...prev, { name, detail }]);
+          };
           switch (tc.name) {
             case "write_file": {
+              toolLabel("write_file", args.path);
               const file: ProjectFile = {
                 id: crypto.randomUUID(),
                 name: args.path.split("/").pop() || args.path,
@@ -153,6 +157,7 @@ export function useNeroChat() {
               break;
             }
             case "read_file": {
+              toolLabel("read_file", args.path);
               const found = files.find((f) => f.path === args.path || f.name === args.path);
               const result = found ? found.content : `Error: file not found: ${args.path}`;
               addConsoleLog(`👁️ Read: ${args.path}`);
@@ -160,23 +165,27 @@ export function useNeroChat() {
               break;
             }
             case "delete_file": {
+              toolLabel("delete_file", args.path);
               deleteFile(args.path);
               addConsoleLog(`🗑️ Deleted: ${args.path}`);
               toolResults.push({ id: tc.id, result: `Deleted: ${args.path}` });
               break;
             }
             case "rename_file": {
+              toolLabel("rename_file", `${args.old_path} → ${args.new_path}`);
               renameFile(args.old_path, args.new_path);
               addConsoleLog(`✏️ Renamed: ${args.old_path} → ${args.new_path}`);
               toolResults.push({ id: tc.id, result: `Renamed ${args.old_path} → ${args.new_path}` });
               break;
             }
             case "list_files": {
+              toolLabel("list_files", "");
               const paths = files.map((f) => f.path).join("\n");
               toolResults.push({ id: tc.id, result: paths || "(no files)" });
               break;
             }
             case "run_shell": {
+              toolLabel("run_shell", args.command);
               const cmdResult = executeCommand(args.command, files, env);
               const output = typeof cmdResult === "string" ? cmdResult : cmdResult.text;
               addConsoleLog(`🖥️ Shell: ${args.command}`);
