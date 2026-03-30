@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNeroChat } from "@/hooks/useNeroChat";
-import { Send, Zap, ChevronDown, ChevronRight, Check, Edit2, FileText, Eye, Trash2, ArrowRight, FolderOpen, Terminal } from "lucide-react";
+import { Send, Zap, ChevronDown, ChevronRight, Check, Edit2, FileText, Eye, Trash2, ArrowRight, FolderOpen, Terminal, Cpu } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -75,9 +75,22 @@ const TOOL_META: Record<string, { icon: typeof FileText; label: string; color: s
   run_shell: { icon: Terminal, label: "Running", color: "text-orange-400" },
 };
 
+const AI_MODELS = [
+  { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash", desc: "Fast & capable" },
+  { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", desc: "Advanced reasoning" },
+  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", desc: "Complex tasks" },
+  { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", desc: "Balanced" },
+  { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Lite", desc: "Fastest" },
+  { id: "openai/gpt-5", label: "GPT-5", desc: "Powerful all-rounder" },
+  { id: "openai/gpt-5-mini", label: "GPT-5 Mini", desc: "Cost-effective" },
+  { id: "openai/gpt-5-nano", label: "GPT-5 Nano", desc: "Speed optimized" },
+  { id: "openai/gpt-5.2", label: "GPT-5.2", desc: "Latest & best" },
+];
+
 export function ChatPanel() {
-  const { messages, isLoading, streamingContent, sendMessage, pendingPlan, approvePlan, editPlan, toolActivity } = useNeroChat();
+  const { messages, isLoading, streamingContent, sendMessage, pendingPlan, approvePlan, editPlan, toolActivity, selectedModel, setSelectedModel } = useNeroChat();
   const [input, setInput] = useState("");
+  const [modelOpen, setModelOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -213,7 +226,46 @@ export function ChatPanel() {
       </div>
 
       {/* Input */}
-      <div className="border-t border-border p-3">
+      <div className="border-t border-border p-3 space-y-2">
+        {/* Model Selector */}
+        <div className="relative">
+          <button
+            onClick={() => setModelOpen(!modelOpen)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium text-muted-foreground hover:text-foreground bg-nero-surface border border-border transition-colors"
+          >
+            <Cpu className="w-3 h-3" />
+            {AI_MODELS.find(m => m.id === selectedModel)?.label || "Select model"}
+            <ChevronDown className={`w-3 h-3 transition-transform ${modelOpen ? "rotate-180" : ""}`} />
+          </button>
+          <AnimatePresence>
+            {modelOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.15 }}
+                className="absolute bottom-full left-0 mb-1 w-64 bg-nero-surface border border-border rounded-xl shadow-lg overflow-hidden z-50"
+              >
+                {AI_MODELS.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => { setSelectedModel(m.id); setModelOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-accent/10 transition-colors ${
+                      m.id === selectedModel ? "bg-accent/15" : ""
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-medium ${m.id === selectedModel ? "text-foreground" : "text-secondary-foreground"}`}>{m.label}</p>
+                      <p className="text-[10px] text-muted-foreground">{m.desc}</p>
+                    </div>
+                    {m.id === selectedModel && <Check className="w-3 h-3 text-foreground shrink-0" />}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         <div className="flex items-end gap-2 bg-nero-surface rounded-xl border border-border px-3">
           <textarea
             value={input}
