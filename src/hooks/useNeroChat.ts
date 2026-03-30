@@ -29,6 +29,7 @@ export function useNeroChat() {
   const [pendingPlan, setPendingPlan] = useState<string[] | null>(null);
   const [pendingInput, setPendingInput] = useState("");
   const [toolActivity, setToolActivity] = useState<{ name: string; detail: string }[]>([]);
+  const [selectedModel, setSelectedModel] = useState("google/gemini-3-flash-preview");
 
   const messages = project?.chatMessages || [];
 
@@ -60,7 +61,7 @@ export function useNeroChat() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ messages: allMessages }),
+          body: JSON.stringify({ messages: allMessages, model: selectedModel }),
         }
       );
       if (!resp.ok || !resp.body) {
@@ -70,7 +71,7 @@ export function useNeroChat() {
       }
       return resp;
     },
-    [addConsoleLog]
+    [addConsoleLog, selectedModel]
   );
 
   const streamResponse = useCallback(
@@ -365,5 +366,5 @@ export function useNeroChat() {
     [approvePlan]
   );
 
-  return { messages, isLoading, streamingContent, sendMessage, pendingPlan, approvePlan, editPlan, toolActivity };
+  return { messages, isLoading, streamingContent, sendMessage, pendingPlan, approvePlan, editPlan, toolActivity, selectedModel, setSelectedModel };
 }
